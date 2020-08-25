@@ -1,85 +1,88 @@
-/* eslint-disable import/order */
-import ServerError from '../../utils/ServerError';
-import User from '../models/User';
-import authConfig from '../../config/auth';
-import jwt from 'jsonwebtoken';
-import logger from '../../utils/logger';
+import jwt from "jsonwebtoken";
+import authConfig from "../../config/auth";
+
+import Address from "../models/Address";
+import User from "../models/User";
+
+import ServerError from "../../utils/ServerError";
+import logger from "../../utils/logger";
 
 /**
  * Service class to perform user related operations.
  */
 class UserService {
   /**
-   * Performs a login by email and password.
+   * Performs a login by username and password.
    *
-   * @param {string} email the user's email
+   * @param {string} username the user's username
    * @param {string} password the user's password
    * @returns a promise that resolves to and object with the user data and a JWT token
    */
-  async driverLogin(email, password) {
+  async userLogin(username, password) {
     const user = await User.findOne({
       where: {
-        email,
+        username,
       },
     });
 
     if (!user) {
-      throw new ServerError('Usuário inválido', 401, 'warn');
+      throw new ServerError("Usuário inválido", 401, "warn");
     }
 
     if (!(await user.checkPassword(password))) {
       logger.warn(`Wrong password attempt for user ${user.email}`);
-      throw new ServerError('Senha inválida', 401, 'warn');
+      throw new ServerError("Senha inválida", 401, "warn");
     }
 
     return this.buildAuthResponse(user);
   }
 
   /**
-   * Creates a new driver user.
+   * Creates a new user.
    *
-   * @param {string} email the new user email
-   * @param {string} password the new user password
-   * @param {string} name the new user name
-   * @param {string} phone the new user phone number
-   * @param {string} app the acessed app
+   * @param {string} userInfos the new user infos
    * @returns a promise that resolves to the auth reponse object, user data and JWT token
    */
-  async driverSignup(email, password, name, phone, app) {
-    const id = await this.getCognitoId(email, process.env.AWS_COGNITO_CUSTOM_PROVIDER_ID);
-
-    let existingUser = await User.findByPk(id);
-
-    if (existingUser) {
-      throw new ServerError('Já existe um usuário cadastrado com este email', 409, 'warn');
-    }
-
-    existingUser = await User.findOne({
+  async userSignup(userInfos) {
+    const existingUser = await User.findOne({
       where: {
-        phone,
+        username: userInfos.username,
       },
     });
 
     if (existingUser) {
-      throw new ServerError('Já existe um usuário cadastrado com este telefone', 409, 'warn');
+      throw new ServerError(
+        "Já existe um usuário cadastrado com este nome de usuário",
+        409,
+        "warn"
+      );
     }
 
-    const user = await User.create(
-      {
-        id,
-        email,
-        pass: password,
-        name,
-        phone,
-        authority: 'USER,DRIVER',
-        userInfo: {
-          name,
-          email,
-          phone,
-        },
-      },
-      { include: [{ association: User.UserInfo }] }
-    );
+    const user = await User.create({
+      email: userInfos.email,
+      pass: userInfos.password,
+      phone: userInfos.phone,
+      fullName: userInfos.fullName,
+      textToSpeech: userInfos.textToSpeech,
+      role: userInfos.role,
+      username: userInfos.username,
+    });
+
+    const address = await Address.create({
+      street: userInfos.street,
+      city: userInfos.city,
+      uf: userInfos.uf,
+      neighborhood: userInfos.neighborhood,
+      state: userInfos.state,
+      country: userInfos.country,
+      number: userInfos.number,
+    });
+
+    console.log(address, "Address CREATE");
+
+    user.update({
+      addressId: address.id,
+    });
 
     return this.buildAuthResponse(user);
   }
@@ -97,7 +100,7 @@ class UserService {
     const user = await User.findByPk(userId);
 
     if (!user) {
-      throw new ServerError('Usuário não encontrado', 404, 'warn');
+      throw new ServerError("Usuário não encontrado", 404, "warn");
     }
 
     user.name = name;
@@ -106,7 +109,7 @@ class UserService {
       const isCorrect = await user.checkPassword(currentPassword);
 
       if (!isCorrect) {
-        throw new ServerError('Senha inválida', 401, 'warn');
+        throw new ServerError("Senha inválida", 401, "warn");
       }
 
       user.pass = newPassword;
@@ -165,15 +168,20 @@ class UserService {
   /**
    * Request a password reset for the user with the provided email. Sends an email with a link to a page where the user may change it's password.
    *
-   * @param {string} email the user's email
+   * @param {string} username the user's username
    * @returns a promise that resolves to void after the email is sent
    */
-  async resetPasswordRequest(email) {
-    const userId = await this.getCognitoId(email, process.env.AWS_COGNITO_CUSTOM_PROVIDER_ID);
-
-    const user = await User.findByPk(userId, {
-      attributes: ['password', 'id', 'email', 'name'],
-    });
+  async resetPasswordRequest(username) {
+    const user = await User.findOne(
+      {
+        where: {
+          username,
+        },
+      },
+      {
+        attributes: ["password", "id", "email", "name"],
+      }
+    );
 
     // If no user is found just return. Can't return error because we do not want a way for someone to find out valid emails
     if (!user) {
@@ -182,7 +190,7 @@ class UserService {
 
     // Create a JWT token usable only for password reset. Signed with the current password hash so it can't be reused. Expires in 1 hour.
     const token = jwt.sign({ id: user.id }, user.password, {
-      expiresIn: '1h',
+      expiresIn: "1h",
     });
 
     await this.sendPasswordResetEmail(user.email, user.name, token);
@@ -200,16 +208,18 @@ class UserService {
 
     // If token is not a jwt token at all
     if (!decoded) {
-      throw new ServerError('Este token não é válido', 401, 'warn');
+      throw new ServerError("Este token não é válido", 401, "warn");
     }
 
-    const user = await User.findByPk(decoded.id, { attributes: ['password', 'id'] });
+    const user = await User.findByPk(decoded.id, {
+      attributes: ["password", "id"],
+    });
 
     try {
       // Validate the token using the current password hash as secret
       jwt.verify(token, user.password);
     } catch (err) {
-      throw new ServerError('Este token não é válido', 401, 'warn');
+      throw new ServerError("Este token não é válido", 401, "warn");
     }
 
     user.pass = pass;

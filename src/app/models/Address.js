@@ -1,10 +1,10 @@
-import { DataTypes, Model } from 'sequelize';
+import { DataTypes, Model } from "sequelize";
 
 class Address extends Model {
   static init(sequelize) {
     super.init(
       {
-        streeet: DataTypes.STRING,
+        street: DataTypes.STRING,
         city: DataTypes.STRING,
         uf: DataTypes.STRING,
         neighborhood: DataTypes.STRING,
@@ -15,12 +15,12 @@ class Address extends Model {
           validate: {
             isNumeric: true,
           },
-          field: 'number',
+          field: "number",
         },
       },
       {
         sequelize,
-        tableName: 'address',
+        tableName: "address",
         timestamps: false,
       }
     );

@@ -1,18 +1,24 @@
-import { DataTypes, Model } from 'sequelize';
+import { DataTypes, Model } from "sequelize";
 
-import bcrypt from 'bcryptjs';
+import bcrypt from "bcryptjs";
 
 class User extends Model {
   static init(sequelize) {
     super.init(
       {
         username: DataTypes.STRING,
-        full_name: DataTypes.STRING,
+        fullName: {
+          type: DataTypes.STRING,
+          field: "full_name",
+        },
         email: DataTypes.STRING,
         profile_image: DataTypes.STRING,
         pass: DataTypes.VIRTUAL,
         password: DataTypes.STRING,
-        enabled: DataTypes.BOOLEAN,
+        enabled: {
+          type: DataTypes.BOOLEAN,
+          defaultValue: true,
+        },
         role: DataTypes.STRING,
         phone: {
           type: DataTypes.STRING,
@@ -20,33 +26,44 @@ class User extends Model {
             isNumeric: true,
             len: [10, 11],
           },
-          field: 'phone_number',
+          field: "phone",
         },
         creation: {
           type: DataTypes.DATE,
           defaultValue: DataTypes.NOW,
         },
-        text_to_speech: {
+        textToSpeech: {
           type: DataTypes.BOOLEAN,
           defaultValue: false,
+          field: "text_to_speech",
         },
       },
       {
         sequelize,
-        tableName: 'user',
+        tableName: "users",
         timestamps: false,
       }
     );
 
-    this.addHook('beforeSave', async user => {
+    this.addHook("beforeSave", async (user) => {
       if (user.pass) {
         const hash = await bcrypt.hash(user.pass, 8);
 
-        user.password = hash.replace('$2b', '$2a');
+        user.password = hash.replace("$2b", "$2a");
       }
     });
 
     return this;
+  }
+
+  static associate(models) {
+    this.belongsTo(models.Address, {
+      foreignKey: {
+        name: "addressId",
+        field: "address_id",
+      },
+      as: "address",
+    });
   }
 
   async checkPassword(password) {
@@ -55,7 +72,7 @@ class User extends Model {
       return false;
     }
 
-    return bcrypt.compare(password, this.password.replace('$2a', '$2b'));
+    return bcrypt.compare(password, this.password.replace("$2a", "$2b"));
   }
 }
 

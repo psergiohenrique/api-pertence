@@ -1,7 +1,7 @@
-import * as Yup from 'yup';
+import * as Yup from "yup";
 
-import ServerError from '../../utils/ServerError';
-import UserService from '../services/UserService';
+import ServerError from "../../utils/ServerError";
+import UserService from "../services/UserService";
 
 /**
  * Controller to perform authentication or create users.
@@ -17,20 +17,18 @@ class SessionController {
   async userLogin(req, res) {
     const valid = await Yup.object()
       .shape({
-        email: Yup.string()
-          .email()
-          .required(),
+        username: Yup.string().required(),
         password: Yup.string().required(),
       })
       .isValid(req.body);
 
     if (!valid) {
-      throw new ServerError('Erro de validação', 400, 'warn');
+      throw new ServerError("Erro de validação", 400, "warn");
     }
 
-    const { email, password } = req.body;
+    const { username, password } = req.body;
 
-    const response = await UserService.driverLogin(email, password);
+    const response = await UserService.userLogin(username, password);
     return res.json(response);
   }
 
@@ -55,26 +53,17 @@ class SessionController {
   async userSignup(req, res) {
     const valid = await Yup.object()
       .shape({
-        email: Yup.string()
-          .email()
-          .required(),
-        password: Yup.string()
-          .matches(/^(?=.*[0-9])(?=.*[a-zA-Z])([a-zA-Z0-9]+)$/)
-          .required(),
-        name: Yup.string().required(),
-        phone: Yup.string()
-          .matches(/\d{10,11}/)
-          .required(),
+        username: Yup.string().required(),
+        password: Yup.string().required(),
+        fullName: Yup.string().required(),
       })
       .isValid(req.body);
 
     if (!valid) {
-      throw new ServerError('Erro de validação', 400, 'warn');
+      throw new ServerError("Erro de validação", 400, "warn");
     }
 
-    const { email, password, name, phone } = req.body;
-
-    const response = await UserService.driverSignup(email, password, name, phone);
+    const response = await UserService.userSignup(req.body);
     return res.status(201).json(response);
   }
 
@@ -92,20 +81,25 @@ class SessionController {
           .min(5)
           .required(),
         currentPassword: Yup.string()
-          .transform(value => (!value ? null : value))
+          .transform((value) => (!value ? null : value))
           .nullable(),
         newPassword: Yup.string()
-          .transform(value => (!value ? null : value))
+          .transform((value) => (!value ? null : value))
           .matches(/^(?=.*[0-9])(?=.*[a-zA-Z])([a-zA-Z0-9]+)$/)
           .nullable(),
       })
       .isValid(req.body);
 
     if (!valid) {
-      throw new ServerError('Erro de validação', 400, 'warn');
+      throw new ServerError("Erro de validação", 400, "warn");
     }
 
-    const user = await UserService.updateUser(req.userId, req.body.name, req.body.currentPassword, req.body.newPassword);
+    const user = await UserService.updateUser(
+      req.userId,
+      req.body.name,
+      req.body.currentPassword,
+      req.body.newPassword
+    );
 
     const response = {
       user: {
@@ -139,7 +133,7 @@ class SessionController {
       .isValid(req.body);
 
     if (!valid) {
-      throw new ServerError('Erro de validação', 400, 'warn');
+      throw new ServerError("Erro de validação", 400, "warn");
     }
 
     await UserService.resetPasswordRequest(req.body.email);
@@ -158,7 +152,7 @@ class SessionController {
     const valid = await Yup.object()
       .shape({
         password: Yup.string()
-          .transform(value => (!value ? null : value))
+          .transform((value) => (!value ? null : value))
           .matches(/^(?=.*[0-9])(?=.*[a-zA-Z])([a-zA-Z0-9]+)$/)
           .required(),
         token: Yup.string().required(),
@@ -166,7 +160,7 @@ class SessionController {
       .isValid(req.body);
 
     if (!valid) {
-      throw new ServerError('Erro de validação', 400, 'warn');
+      throw new ServerError("Erro de validação", 400, "warn");
     }
 
     await UserService.resetPassword(req.body.token, req.body.password);
